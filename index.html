@@ -196,7 +196,7 @@ let catLabel='';
 function initGame() {
   score=0; streak=0; lives=3;
   blocks=[]; particles=[]; feedbacks=[];
-  frameCount=0; roadOffset=0; spawnReady=true; usedQs=[]; stallTimer=0;
+  frameCount=0; roadOffset=0; spawnReady=true; usedQs=[]; stallTimer=0; gameTime=0;
   moto.lane=1; moto.x=laneX(1); moto.y=GROUND_Y-38;
   moto.vy=0; moto.jumping=false; moto.tilt=0; moto.wheelSpin=0;
   clouds = Array.from({length:6},()=>({
@@ -228,9 +228,10 @@ function pickQuestion() {
 function spawnBlocks() {
   if (!spawnReady || blocks.length > 0) return;
   spawnReady = false;
-  // Stagger: left arrives first, then right, then centre last
-  // offsets are negative (further above screen = arrives later)
-  const stagger = [0, -90, -50]; // lane 0 first, lane 2 second, lane 1 last
+  // Gap grows with time: starts at 280px, reaches 600px after 3 minutes
+  // This ensures the rider always has enough room to jump between blocks even at high speed
+  const gap = 280 + Math.min((gameTime / (60*60)) * 320, 320);
+  const stagger = [0, -gap, -gap*2];
   blocks = answerWords.map((word,i)=>({
     lane: i, label: word,
     isCorrect: word === currentQ.a,
@@ -277,10 +278,11 @@ function loop() {
 }
 
 // ═══════════════════════════ UPDATE ═══════════════════════════
-let stallTimer = 0;
+let stallTimer = 0, gameTime = 0;
 
 function update() {
   frameCount++;
+  gameTime++;
   roadOffset = (roadOffset+4)%80;
   shakeX*=0.7; shakeY*=0.7;
 
@@ -326,7 +328,8 @@ function update() {
 
   // Spawn & move blocks
   spawnBlocks();
-  const speed = 2.2 + Math.min(score*0.015, 3);
+  // Speed ramps smoothly over 3 minutes from 2 up to 10
+  const speed = 2 + Math.min((gameTime / (60*60)) * 8, 8);
   blocks.forEach(b=>{ if(!b.hit) b.y+=speed; else b.hitTimer++; });
 
   // Collision
@@ -703,6 +706,13 @@ function drawUI() {
   ctx.fillStyle='#aaaaff'; ctx.fillText('Streak:',W/2-60,sy);
   ctx.fillStyle=streak>0?'#FFD700':'#fff';
   ctx.fillText('🔥 '+streak, W/2+5,sy);
+
+  // Speed level
+  const speedLevel = Math.floor(1 + Math.min((gameTime/(60*60))*8, 8));
+  const speedColours = ['#00e676','#69f0ae','#ffeb3b','#ffeb3b','#ffa726','#ffa726','#ff7043','#f44336','#b71c1c'];
+  ctx.fillStyle = speedColours[Math.min(speedLevel-1, speedColours.length-1)];
+  ctx.textAlign='center';
+  ctx.fillText('⚡ Speed '+speedLevel, W/2, sy-22);
 
   ctx.font='17px sans-serif'; ctx.textAlign='right';
   ctx.fillText('❤️'.repeat(Math.max(0,lives))+'🖤'.repeat(Math.max(0,3-lives)),W-14,sy);
